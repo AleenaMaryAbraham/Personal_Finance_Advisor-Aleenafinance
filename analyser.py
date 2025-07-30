@@ -1,115 +1,132 @@
 import streamlit as st
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
-import io
-from fpdf import FPDF
+import numpy as np
+import plotly.express as px
 
+# Title and description
 st.set_page_config(page_title="Personal Finance Advisor", layout="centered")
-st.title("💸 Personal Finance Advisor – AleenaFinance")
-
+st.title("💸 Personal Finance Advisor")
 st.markdown("""
-Upload your monthly income and expense data (in CSV/XLS/XLSX format). The app will compute:
-- Yearly average income and expenses
-- Annual surplus or deficit
-- A forecast for next year's savings
-- Risk analysis
-- And a downloadable PDF report with recommendations
+This app recommends savings or investment plans based on your income, expenses, and risk appetite. 
+Upload your historical income and expense data to get personalized suggestions and visual insights.
 """)
 
-# Function to generate PDF report
+# Upload file
+uploaded_file = st.file_uploader("Upload your income and expense data (CSV, XLS, XLSX)", type=["csv", "xls", "xlsx"])
+
+if uploaded_file:
+    # Read data
+    if uploaded_file.name.endswith(".csv"):
+        data = pd.read_csv(uploaded_file)
+    else:
+        data = pd.read_excel(uploaded_file)
+
+    st.subheader("📊 Uploaded Data")
+    st.dataframe(data)
+
+    # Check for required columns
+    expense_cols = ['Expenses', 'Expense', 'Total Expense', 'Total Expenses']
+    expense_col_found = None
+    for col in expense_cols:
+        if col in data.columns:
+            expense_col_found = col
+            break
+
+    if 'Year' in data.columns and 'Income' in data.columns and expense_col_found:
+        # Rename expense column to a consistent name
+        data = data.rename(columns={expense_col_found: 'Expenses'})
+
+        # Calculate surplus
+        data['Surplus'] = data['Income'] - data['Expenses']
+
+        # Summary Metrics
+        st.subheader("📈 Summary Metrics")
+        avg_income = data['Income'].mean()
+        avg_expenses = data['Expenses'].mean()
+        avg_surplus = data['Surplus'].mean()
+        st.metric("Average Annual Income", f"₹{avg_income:,.2f}")
+        st.metric("Average Annual Expenses", f"₹{avg_expenses:,.2f}")
+        st.metric("Average Annual Surplus", f"₹{avg_surplus:,.2f}")
+
+        # Visualizations
+        st.subheader("📉 Income vs Expenses Over Time")
+        fig1 = px.line(data, x='Year', y=['Income', 'Expenses', 'Surplus'], markers=True)
+        st.plotly_chart(fig1)
+
+        st.subheader("💰 Surplus Distribution")
+        fig2 = px.pie(data, values='Surplus', names='Year', title='Surplus Distribution by Year')
+        st.plotly_chart(fig2)
+
+        # Risk Appetite
+        st.subheader("⚖️ Choose Your Risk Appetite")
+        risk = st.selectbox("Risk Tolerance", ["Low", "Medium", "High"])
+
+        st.markdown("### 🧠 Recommended Strategy")
+        if risk == "Low":
+            st.info("Recommended: Fixed Deposits, Recurring Deposits, Public Provident Fund (PPF)")
+        elif risk == "Medium":
+            st.info("Recommended: Balanced Mutual Funds, SIPs")
+        else:
+            st.info("Recommended: Equity Mutual Funds, Direct Stocks")
+
+        # SIP Calculator
+        st.subheader("📅 SIP Calculator")
+        sip_amount = st.number_input("Monthly Investment (₹)", min_value=0, value=5000)
+        sip_years = st.slider("Investment Period (Years)", 1, 30, 5)
+        sip_rate = st.slider("Expected Annual Return (%)", 1, 20, 12)
+
+        months = sip_years * 12
+        monthly_rate = sip_rate / 12 / 100
+        future_value = sip_amount * (((1 + monthly_rate) ** months - 1) * (1 + monthly_rate)) / monthly_rate
+        st.success(f"Estimated SIP Returns after {sip_years} years: ₹{future_value:,.2f}")
+
+        # FD Calculator
+        st.subheader("🏦 Fixed Deposit Calculator")
+        fd_principal = st.number_input("FD Principal Amount (₹)", min_value=0, value=50000)
+        fd_years = st.slider("FD Tenure (Years)", 1, 10, 3)
+        fd_rate = st.slider("FD Interest Rate (%)", 1, 10, 6)
+        fd_return = fd_principal * ((1 + fd_rate / 100) ** fd_years)
+        st.success(f"Estimated FD Returns after {fd_years} years: ₹{fd_return:,.2f}")
+
+    else:
+        st.error("Please make sure your file has columns: 'Year', 'Income', and one of: 'Expense', 'Expenses', 'Total Expense', or 'Total Expenses'.")
+
+from fpdf import FPDF
+from io import BytesIO
+
 def generate_pdf(data, avg_income, avg_expenses, avg_surplus, future_value, fd_return, risk, recommendation):
     pdf = FPDF()
     pdf.add_page()
     pdf.set_font("Arial", size=12)
 
-    pdf.cell(200, 10, txt="Personal Finance Report", ln=True, align='C')
+    pdf.cell(200, 10, txt="📊 Personal Finance Report", ln=True, align="C")
     pdf.ln(10)
-
-    pdf.cell(200, 10, txt=f"Average Annual Income: ₹{avg_income:,.2f}", ln=True)
-    pdf.cell(200, 10, txt=f"Average Annual Expenses: ₹{avg_expenses:,.2f}", ln=True)
-    pdf.cell(200, 10, txt=f"Average Annual Surplus: ₹{avg_surplus:,.2f}", ln=True)
-    pdf.cell(200, 10, txt=f"Estimated Next Year Surplus: ₹{future_value:,.2f}", ln=True)
-    pdf.cell(200, 10, txt=f"Expected FD Return (6%): ₹{fd_return:,.2f}", ln=True)
-    pdf.cell(200, 10, txt=f"Risk Assessment: {risk}", ln=True)
-
+    
+    # Summary values
+    pdf.cell(200, 10, txt=f"Average Annual Income: {avg_income:.2f}", ln=True)
+    pdf.cell(200, 10, txt=f"Average Annual Expenses: {avg_expenses:.2f}", ln=True)
+    pdf.cell(200, 10, txt=f"Average Annual Surplus: {avg_surplus:.2f}", ln=True)
+    pdf.cell(200, 10, txt=f"Future Value (SIP): {future_value:.2f}", ln=True)
+    pdf.cell(200, 10, txt=f"Fixed Deposit Return: {fd_return:.2f}", ln=True)
+    pdf.cell(200, 10, txt=f"Risk Appetite: {risk}", ln=True)
     pdf.ln(10)
-    pdf.multi_cell(0, 10, txt="Recommendation: " + recommendation)
-
-    pdf_output = io.BytesIO()
+    
+    # Advice Section
+    pdf.multi_cell(0, 10, txt=f"💡 Recommendation: {recommendation}")
+    
+    # Convert to BytesIO
+    pdf_output = BytesIO()
     pdf.output(pdf_output)
-    return pdf_output.getvalue()
+    pdf_output.seek(0)
+    return pdf_output.read()
 
-# File uploader
-uploaded_file = st.file_uploader("Upload your income-expense data file", type=["csv", "xls", "xlsx"])
-
-if uploaded_file:
-    try:
-        if uploaded_file.name.endswith("csv"):
-            df = pd.read_csv(uploaded_file)
-        else:
-            df = pd.read_excel(uploaded_file)
-
-        # Normalize column names
-        df.columns = [col.strip().capitalize() for col in df.columns]
-
-        # Map expense-related column
-        expense_col_candidates = ['Expense', 'Expenses', 'Total expense', 'Total expenses']
-        expense_col = next((col for col in df.columns if col.lower() in [e.lower() for e in expense_col_candidates]), None)
-
-        if 'Year' in df.columns and 'Income' in df.columns and expense_col:
-            df = df[['Year', 'Income', expense_col]]
-            df.rename(columns={expense_col: 'Expenses'}, inplace=True)
-
-            df['Surplus'] = df['Income'] - df['Expenses']
-
-            avg_income = df['Income'].mean()
-            avg_expenses = df['Expenses'].mean()
-            avg_surplus = df['Surplus'].mean()
-
-            future_value = avg_surplus * 1.1
-            fd_return = future_value * 1.06
-
-            risk = "Low" if avg_expenses < avg_income else "High"
-            recommendation = (
-                "Your spending habits are healthy. Maintain a budget to keep expenses under control and consider investing surplus in low-risk instruments like Fixed Deposits or SIPs."
-                if risk == "Low" else
-                "You are overspending. Try to categorize your expenses and reduce discretionary spending. A budget tracker can help."
-            )
-
-            # Visualizations
-            st.subheader("📊 Visualizations")
-            fig, ax = plt.subplots()
-            sns.lineplot(data=df, x='Year', y='Income', label='Income')
-            sns.lineplot(data=df, x='Year', y='Expenses', label='Expenses')
-            sns.lineplot(data=df, x='Year', y='Surplus', label='Surplus')
-            plt.legend()
-            st.pyplot(fig)
-
-            # Display key metrics
-            st.subheader("📌 Summary")
-            st.write(f"**Average Income:** ₹{avg_income:,.2f}")
-            st.write(f"**Average Expenses:** ₹{avg_expenses:,.2f}")
-            st.write(f"**Average Surplus:** ₹{avg_surplus:,.2f}")
-            st.write(f"**Next Year Surplus Projection:** ₹{future_value:,.2f}")
-            st.write(f"**FD Return (6%):** ₹{fd_return:,.2f}")
-            st.write(f"**Risk Profile:** {risk}")
-            st.markdown(f"**💡 Advice:** {recommendation}")
-
-            # PDF download
-            st.subheader("📥 Download Your Report")
-            if st.button("📄 Generate and Download Personalized PDF Report"):
-                pdf_buffer = generate_pdf(
-                    df, avg_income, avg_expenses, avg_surplus, future_value, fd_return, risk, recommendation
-                )
-                st.download_button(
-                    label="⬇️ Click to Download Report",
-                    data=pdf_buffer,
-                    file_name="Personal_Finance_Report.pdf",
-                    mime="application/pdf"
-                )
-        else:
-            st.error("Please make sure your file has columns: 'Year', 'Income', and one of: 'Expense', 'Expenses', 'Total Expense', or 'Total Expenses'.")
-
-    except Exception as e:
-        st.error(f"An error occurred: {e}")
+# PDF Download
+st.subheader("📥 Download Your Report")
+if st.button("Generate PDF Report"):
+    pdf_data = generate_pdf(
+        data, avg_income, avg_expenses, avg_surplus,
+        future_value, fd_return, risk, recommendation
+    )
+    b64 = base64.b64encode(pdf_data).decode()
+    href = f'<a href="data:application/pdf;base64,{b64}" download="Personal_Finance_Report.pdf">📄 Click here to download your report</a>'
+    st.markdown(href, unsafe_allow_html=True)
