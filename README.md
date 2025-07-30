@@ -10,3 +10,5 @@ b. Translates raw financial inputs into actionable insights,
 c. Simplifies savings/investment planning for non-experts, and
 
 d. Encourages better money management aligned to user goals and risk profiles.
+
+This app recommends savings or investment plans based on your income, expenses, and risk appetite. Upload your historical income and expense data to get personalized suggestions and visual insights.
