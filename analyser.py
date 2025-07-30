@@ -1,71 +1,75 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.graph_objs as go
-
-st.set_page_config(page_title="Personal Finance Advisor", layout="centered")
+import plotly.express as px
 
 # Title
+st.set_page_config(page_title="Personal Finance Advisor", layout="centered")
 st.title("💸 Personal Finance Advisor")
-st.write("Get personalized savings or investment advice based on your goals.")
+st.markdown("""
+This app recommends savings or investment plans based on your income, expenses, and risk appetite. 
+Upload your historical income and expense data to get personalized suggestions and visual insights.
+""")
 
-# Sidebar Input
-st.sidebar.header("Enter Your Financial Details")
-income = st.sidebar.number_input("Monthly Income (₹)", min_value=0.0, step=100.0)
-expenses = st.sidebar.number_input("Monthly Expenses (₹)", min_value=0.0, step=100.0)
-risk = st.sidebar.radio("Your Risk Appetite", ["Low", "Moderate", "High"])
+# Upload data file
+uploaded_file = st.file_uploader("Upload your income and expense data (CSV, XLS, XLSX)", type=["csv", "xls", "xlsx"])
 
-surplus = income - expenses
-
-# Show a quick summary
-st.subheader("📊 Financial Summary")
-st.metric("Monthly Surplus (₹)", f"{surplus:,.2f}")
-fig = go.Figure()
-fig.add_trace(go.Pie(labels=["Expenses", "Surplus"], values=[expenses, surplus], hole=0.5))
-st.plotly_chart(fig, use_container_width=True)
-
-# Recommendation Logic
-st.subheader("🤖 Investment Recommendation")
-if surplus <= 0:
-    st.warning("Your expenses exceed or equal income. Reduce expenses to start saving.")
-else:
-    if risk == "Low":
-        rec = "Fixed Deposit (FD), Recurring Deposit (RD), Public Provident Fund (PPF)"
-    elif risk == "Moderate":
-        rec = "Systematic Investment Plan (SIP), Balanced Mutual Funds"
+if uploaded_file:
+    if uploaded_file.name.endswith(".csv"):
+        data = pd.read_csv(uploaded_file)
     else:
-        rec = "Equity Mutual Funds, Stocks, SIP in ELSS"
+        data = pd.read_excel(uploaded_file)
 
-    st.success(f"Based on your risk profile, consider investing in: **{rec}**")
+    st.subheader("📊 Uploaded Data")
+    st.dataframe(data)
 
-# --- Calculators ---
-st.header("📈 Investment Calculators")
+    # Ensure the correct columns exist
+    if {'Year', 'Income', 'Expenses'}.issubset(data.columns):
+        data['Surplus'] = data['Income'] - data['Expenses']
 
-with st.expander("💼 Fixed Deposit (FD) Calculator"):
-    fd_amount = st.number_input("FD Amount (₹)", min_value=0.0, step=100.0)
-    fd_rate = st.number_input("Annual Interest Rate (%)", min_value=0.0, max_value=15.0, step=0.1)
-    fd_years = st.number_input("Time Period (Years)", min_value=1, max_value=30, step=1)
-    if st.button("Calculate FD Returns"):
-        fd_maturity = fd_amount * (1 + fd_rate/100)**fd_years
-        st.success(f"Maturity Amount after {fd_years} years: ₹{fd_maturity:,.2f}")
+        # Summary Metrics
+        st.subheader("📈 Summary Metrics")
+        avg_income = data['Income'].mean()
+        avg_expenses = data['Expenses'].mean()
+        avg_surplus = data['Surplus'].mean()
+        st.metric("Average Annual Income", f"₹{avg_income:,.2f}")
+        st.metric("Average Annual Expenses", f"₹{avg_expenses:,.2f}")
+        st.metric("Average Annual Surplus", f"₹{avg_surplus:,.2f}")
 
-with st.expander("📅 SIP Calculator"):
-    sip_amount = st.number_input("Monthly SIP Investment (₹)", min_value=0.0, step=100.0)
-    sip_rate = st.number_input("Expected Annual Return (%)", min_value=0.0, max_value=20.0, step=0.5)
-    sip_years = st.number_input("Investment Duration (Years)", min_value=1, max_value=30, step=1)
-    if st.button("Calculate SIP Returns"):
-        r = (sip_rate / 100) / 12
-        n = sip_years * 12
-        future_value = sip_amount * (((1 + r)**n - 1) * (1 + r)) / r
-        st.success(f"Projected SIP Value: ₹{future_value:,.2f}")
+        # Visualizations
+        st.subheader("📉 Income vs Expenses Over Time")
+        fig1 = px.line(data, x='Year', y=['Income', 'Expenses', 'Surplus'], markers=True)
+        st.plotly_chart(fig1)
 
-        # SIP Growth Chart
-        months = np.arange(1, n+1)
-        values = [sip_amount * (((1 + r)**i - 1) * (1 + r)) / r for i in months]
-        fig2 = go.Figure()
-        fig2.add_trace(go.Scatter(x=months, y=values, mode='lines+markers', name='Projected Value'))
-        fig2.update_layout(title="📈 SIP Growth Over Time", xaxis_title="Months", yaxis_title="Investment Value (₹)")
-        st.plotly_chart(fig2, use_container_width=True)
+        st.subheader("💰 Surplus Distribution")
+        fig2 = px.pie(data, values='Surplus', names='Year', title='Surplus Distribution by Year')
+        st.plotly_chart(fig2)
 
-# Footer
-st.caption("Made with 💙 using Streamlit | For educational purposes only.")
+        # Risk appetite selection
+        st.subheader("⚖️ Choose Your Risk Appetite")
+        risk = st.selectbox("Risk Tolerance", ["Low", "Medium", "High"])
+
+        st.markdown("### 🧠 Recommended Strategy")
+        if risk == "Low":
+            st.info("Recommended: Fixed Deposits, Recurring Deposits, Public Provident Fund (PPF)")
+        elif risk == "Medium":
+            st.info("Recommended: Balanced Mutual Funds, SIPs")
+        else:
+            st.info("Recommended: Equity Mutual Funds, Direct Stocks")
+
+        # SIP Calculator
+        st.subheader("📅 SIP Calculator")
+        sip_amount = st.number_input("Monthly Investment (₹)", min_value=0, value=5000)
+        sip_years = st.slider("Investment Period (Years)", 1, 30, 5)
+        sip_rate = st.slider("Expected Annual Return (%)", 1, 20, 12)
+
+        months = sip_years * 12
+        monthly_rate = sip_rate / 12 / 100
+        future_value = sip_amount * (((1 + monthly_rate) ** months - 1) * (1 + monthly_rate)) / monthly_rate
+        st.success(f"Estimated SIP Returns after {sip_years} years: ₹{future_value:,.2f}")
+
+        # FD Calculator
+        st.subheader("🏦 Fixed Deposit Calculator")
+        fd_principal = st.number_input("FD Principal Amount (₹)", min_value=0, value=50000)
+        fd_years = st.slider("FD Tenure (Years)", 1, 10, 3)
+        fd_rate = st.s
