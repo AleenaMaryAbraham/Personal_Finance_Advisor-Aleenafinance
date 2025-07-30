@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.express as px
 
-# Title and description
+# Page setup
 st.set_page_config(page_title="Personal Finance Advisor", layout="centered")
 st.title("💸 Personal Finance Advisor")
 st.markdown("""
@@ -11,7 +11,7 @@ This app recommends savings or investment plans based on your income, expenses, 
 Upload your historical income and expense data to get personalized suggestions and visual insights.
 """)
 
-# Upload file
+# File upload
 uploaded_file = st.file_uploader("Upload your income and expense data (CSV, XLS, XLSX)", type=["csv", "xls", "xlsx"])
 
 if uploaded_file:
@@ -24,7 +24,7 @@ if uploaded_file:
     st.subheader("📊 Uploaded Data")
     st.dataframe(data)
 
-    # Check for required columns
+    # Check required columns
     expense_cols = ['Expenses', 'Expense', 'Total Expense', 'Total Expenses']
     expense_col_found = None
     for col in expense_cols:
@@ -33,13 +33,13 @@ if uploaded_file:
             break
 
     if 'Year' in data.columns and 'Income' in data.columns and expense_col_found:
-        # Rename expense column to a consistent name
+        # Rename for consistency
         data = data.rename(columns={expense_col_found: 'Expenses'})
 
-        # Calculate surplus
+        # Surplus calculation
         data['Surplus'] = data['Income'] - data['Expenses']
 
-        # Summary Metrics
+        # Metrics
         st.subheader("📈 Summary Metrics")
         avg_income = data['Income'].mean()
         avg_expenses = data['Expenses'].mean()
@@ -48,7 +48,7 @@ if uploaded_file:
         st.metric("Average Annual Expenses", f"₹{avg_expenses:,.2f}")
         st.metric("Average Annual Surplus", f"₹{avg_surplus:,.2f}")
 
-        # Visualizations
+        # Charts
         st.subheader("📉 Income vs Expenses Over Time")
         fig1 = px.line(data, x='Year', y=['Income', 'Expenses', 'Surplus'], markers=True)
         st.plotly_chart(fig1)
@@ -57,17 +57,21 @@ if uploaded_file:
         fig2 = px.pie(data, values='Surplus', names='Year', title='Surplus Distribution by Year')
         st.plotly_chart(fig2)
 
-        # Risk Appetite
+        # Risk input
         st.subheader("⚖️ Choose Your Risk Appetite")
         risk = st.selectbox("Risk Tolerance", ["Low", "Medium", "High"])
 
+        # Recommendation logic
         st.markdown("### 🧠 Recommended Strategy")
         if risk == "Low":
-            st.info("Recommended: Fixed Deposits, Recurring Deposits, Public Provident Fund (PPF)")
+            recommendation = "Fixed Deposits, Recurring Deposits, Public Provident Fund (PPF)"
+            st.info(f"Recommended: {recommendation}")
         elif risk == "Medium":
-            st.info("Recommended: Balanced Mutual Funds, SIPs")
+            recommendation = "Balanced Mutual Funds, SIPs"
+            st.info(f"Recommended: {recommendation}")
         else:
-            st.info("Recommended: Equity Mutual Funds, Direct Stocks")
+            recommendation = "Equity Mutual Funds, Direct Stocks"
+            st.info(f"Recommended: {recommendation}")
 
         # SIP Calculator
         st.subheader("📅 SIP Calculator")
@@ -88,26 +92,15 @@ if uploaded_file:
         fd_return = fd_principal * ((1 + fd_rate / 100) ** fd_years)
         st.success(f"Estimated FD Returns after {fd_years} years: ₹{fd_return:,.2f}")
 
+        # Final suggestion section
+        st.subheader("📝 Final Advice")
+        st.markdown(f"""
+        Based on your average annual surplus of **₹{avg_surplus:,.2f}** and your **{risk}** risk appetite, we recommend:
+
+        - **{recommendation}**
+
+        Regularly review your income and expense trends. Consider automating your savings/investments and reviewing returns annually to stay on track with your financial goals.
+        """)
+
     else:
         st.error("Please make sure your file has columns: 'Year', 'Income', and one of: 'Expense', 'Expenses', 'Total Expense', or 'Total Expenses'.")
-
-import base64
-from io import BytesIO
-from fpdf import FPDF
-
-# Final Recommendation Summary
-st.subheader("📌 Final Summary & Suggestions")
-recommendation = ""
-if risk == "Low":
-    recommendation = "Your risk profile is Low. Consider safe investments like Fixed Deposits, PPF, and RDs to preserve capital."
-elif risk == "Medium":
-    recommendation = "Your risk profile is Medium. SIPs and Balanced Mutual Funds could offer a mix of growth and safety."
-else:
-    recommendation = "Your risk profile is High. You may explore Equity Mutual Funds and Direct Stock investments for higher returns."
-
-st.markdown(f"""
-**🧾 Summary Advice:**
-- Based on your average annual surplus of ₹{avg_surplus:,.2f}, a monthly SIP of ₹{sip_amount} for {sip_years} years can grow to ₹{future_value:,.2f}.
-- Alternatively, a fixed deposit of ₹{fd_principal} for {fd_years} years at {fd_rate}% interest may yield ₹{fd_return:,.2f}.
-- {recommendation}
-""")
