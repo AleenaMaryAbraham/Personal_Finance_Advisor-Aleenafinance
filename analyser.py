@@ -126,11 +126,10 @@ if uploaded_file:
 
         # PDF Download
         st.subheader("📥 Download Your Report")
-        if st.button("Generate PDF Report"):
-            pdf_data = generate_pdf(data, avg_income, avg_expenses, avg_surplus, future_value, fd_return, risk, recommendation)
-            b64 = base64.b64encode(pdf_data).decode()
-            href = f'<a href="data:application/octet-stream;base64,{b64}" download="Personal_Finance_Report.pdf">📄 Click here to download your report</a>'
-            st.markdown(href, unsafe_allow_html=True)
-
-    else:
-        st.error("Please make sure your file has columns: 'Year', 'Income', and one of: 'Expense', 'Expenses', 'Total Expense', or 'Total Expenses'.")
+        pdf_buffer = generate_pdf(data, avg_income, avg_expenses, avg_surplus, future_value, fd_return, risk, recommendation)
+st.download_button(
+    label="📄 Download Personalized PDF Report",
+    data=pdf_buffer,
+    file_name="Personal_Finance_Report.pdf",
+    mime="application/pdf"
+)
