@@ -126,10 +126,21 @@ if uploaded_file:
 
         # PDF Download
         st.subheader("📥 Download Your Report")
-        pdf_buffer = generate_pdf(data, avg_income, avg_expenses, avg_surplus, future_value, fd_return, risk, recommendation)
-st.download_button(
-    label="📄 Download Personalized PDF Report",
-    data=pdf_buffer,
-    file_name="Personal_Finance_Report.pdf",
-    mime="application/pdf"
-)
+        if st.button("📄 Generate and Download Personalized PDF Report"):
+    pdf_buffer = generate_pdf(
+        data,
+        avg_income,
+        avg_expenses,
+        avg_surplus,
+        future_value,
+        fd_return,
+        risk,
+        recommendation
+    )
+
+    st.download_button(
+        label="⬇️ Click to Download Report",
+        data=pdf_buffer,
+        file_name="Personal_Finance_Report.pdf",
+        mime="application/pdf"
+    )
