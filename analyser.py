@@ -2,8 +2,11 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
+from fpdf import FPDF
+from io import BytesIO
+import base64
 
-# Title and description
+# Set up Streamlit page
 st.set_page_config(page_title="Personal Finance Advisor", layout="centered")
 st.title("💸 Personal Finance Advisor")
 st.markdown("""
@@ -33,7 +36,7 @@ if uploaded_file:
             break
 
     if 'Year' in data.columns and 'Income' in data.columns and expense_col_found:
-        # Rename expense column to a consistent name
+        # Rename to standard column
         data = data.rename(columns={expense_col_found: 'Expenses'})
 
         # Calculate surplus
@@ -63,11 +66,13 @@ if uploaded_file:
 
         st.markdown("### 🧠 Recommended Strategy")
         if risk == "Low":
-            st.info("Recommended: Fixed Deposits, Recurring Deposits, Public Provident Fund (PPF)")
+            recommendation = "Fixed Deposits, Recurring Deposits, Public Provident Fund (PPF)"
         elif risk == "Medium":
-            st.info("Recommended: Balanced Mutual Funds, SIPs")
+            recommendation = "Balanced Mutual Funds, SIPs"
         else:
-            st.info("Recommended: Equity Mutual Funds, Direct Stocks")
+            recommendation = "Equity Mutual Funds, Direct Stocks"
+
+        st.info(f"Recommended: {recommendation}")
 
         # SIP Calculator
         st.subheader("📅 SIP Calculator")
@@ -88,54 +93,48 @@ if uploaded_file:
         fd_return = fd_principal * ((1 + fd_rate / 100) ** fd_years)
         st.success(f"Estimated FD Returns after {fd_years} years: ₹{fd_return:,.2f}")
 
+        # Recommendation Text
+        rec_text = (
+            f"Based on your average annual surplus of ₹{avg_surplus:,.2f}, "
+            f"your financial discipline appears {'strong' if avg_surplus > 0 else 'weak'}. "
+            f"Considering your risk appetite is '{risk}', it is advisable to invest in {recommendation}. "
+            f"Continue tracking your income and expenses to achieve your long-term financial goals."
+        )
+
+        # Generate PDF function
+        def generate_pdf(data, avg_income, avg_expenses, avg_surplus, future_value, fd_return, risk, recommendation):
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_font("Arial", size=12)
+
+            pdf.cell(200, 10, txt="📊 Personal Finance Report", ln=True, align="C")
+            pdf.ln(10)
+
+            pdf.cell(200, 10, txt=f"Average Annual Income: ₹{avg_income:,.2f}", ln=True)
+            pdf.cell(200, 10, txt=f"Average Annual Expenses: ₹{avg_expenses:,.2f}", ln=True)
+            pdf.cell(200, 10, txt=f"Average Annual Surplus: ₹{avg_surplus:,.2f}", ln=True)
+            pdf.cell(200, 10, txt=f"Future Value (SIP): ₹{future_value:,.2f}", ln=True)
+            pdf.cell(200, 10, txt=f"Fixed Deposit Return: ₹{fd_return:,.2f}", ln=True)
+            pdf.cell(200, 10, txt=f"Risk Appetite: {risk}", ln=True)
+            pdf.ln(10)
+
+            pdf.multi_cell(0, 10, txt=f"💡 Recommendation: {recommendation}")
+
+            pdf_output = BytesIO()
+            pdf.output(pdf_output)
+            pdf_output.seek(0)
+            return pdf_output.read()
+
+        # Download Button
+        st.subheader("📥 Download Your Report")
+        if st.button("Generate PDF Report"):
+            pdf_data = generate_pdf(
+                data, avg_income, avg_expenses, avg_surplus,
+                future_value, fd_return, risk, rec_text
+            )
+            b64 = base64.b64encode(pdf_data).decode()
+            href = f'<a href="data:application/pdf;base64,{b64}" download="Personal_Finance_Report.pdf">📄 Click here to download your report</a>'
+            st.markdown(href, unsafe_allow_html=True)
+
     else:
-        st.error("Please make sure your file has columns: 'Year', 'Income', and one of: 'Expense', 'Expenses', 'Total Expense', or 'Total Expenses'.")
-
-from fpdf import FPDF
-from io import BytesIO
-
-def generate_pdf(data, avg_income, avg_expenses, avg_surplus, future_value, fd_return, risk, recommendation):
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Arial", size=12)
-
-    pdf.cell(200, 10, txt="📊 Personal Finance Report", ln=True, align="C")
-    pdf.ln(10)
-    
-    # Summary values
-    pdf.cell(200, 10, txt=f"Average Annual Income: {avg_income:.2f}", ln=True)
-    pdf.cell(200, 10, txt=f"Average Annual Expenses: {avg_expenses:.2f}", ln=True)
-    pdf.cell(200, 10, txt=f"Average Annual Surplus: {avg_surplus:.2f}", ln=True)
-    pdf.cell(200, 10, txt=f"Future Value (SIP): {future_value:.2f}", ln=True)
-    pdf.cell(200, 10, txt=f"Fixed Deposit Return: {fd_return:.2f}", ln=True)
-    pdf.cell(200, 10, txt=f"Risk Appetite: {risk}", ln=True)
-    pdf.ln(10)
-    
-    # Advice Section
-    pdf.multi_cell(0, 10, txt=f"💡 Recommendation: {recommendation}")
-    
-    # Convert to BytesIO
-    pdf_output = BytesIO()
-    pdf.output(pdf_output)
-    pdf_output.seek(0)
-    return pdf_output.read()
-
-# Generate recommendation paragraph
-recommendation = (
-    f"Based on your average annual surplus of {avg_surplus:.2f}, "
-    f"your financial discipline appears {'strong' if avg_surplus > 0 else 'weak'}. "
-    f"Considering your risk appetite is '{risk}', it is advisable to invest in "
-    f"{'equity mutual funds or stocks for higher returns' if risk == 'High' else 'balanced or fixed-income instruments like FDs or bonds'}. "
-    f"Continue tracking your income and expenses to achieve your long-term financial goals."
-)
-
-# PDF Download
-st.subheader("📥 Download Your Report")
-if st.button("Generate PDF Report"):
-    pdf_data = generate_pdf(
-        data, avg_income, avg_expenses, avg_surplus,
-        future_value, fd_return, risk, recommendation
-    )
-    b64 = base64.b64encode(pdf_data).decode()
-    href = f'<a href="data:application/pdf;base64,{b64}" download="Personal_Finance_Report.pdf">📄 Click here to download your report</a>'
-    st.markdown(href, unsafe_allow_html=True)
+        st.error("Please ensure your file has 'Year', 'Income', and one of: 'Expense', 'Expenses', 'Total Expense', or 'Total Expenses' columns.")
