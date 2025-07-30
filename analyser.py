@@ -2,11 +2,8 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import plotly.express as px
-from fpdf import FPDF
-from io import BytesIO
-import base64
 
-# Set up Streamlit page
+# Title and description
 st.set_page_config(page_title="Personal Finance Advisor", layout="centered")
 st.title("💸 Personal Finance Advisor")
 st.markdown("""
@@ -36,7 +33,7 @@ if uploaded_file:
             break
 
     if 'Year' in data.columns and 'Income' in data.columns and expense_col_found:
-        # Rename to standard column
+        # Rename expense column to a consistent name
         data = data.rename(columns={expense_col_found: 'Expenses'})
 
         # Calculate surplus
@@ -66,13 +63,11 @@ if uploaded_file:
 
         st.markdown("### 🧠 Recommended Strategy")
         if risk == "Low":
-            recommendation = "Fixed Deposits, Recurring Deposits, Public Provident Fund (PPF)"
+            st.info("Recommended: Fixed Deposits, Recurring Deposits, Public Provident Fund (PPF)")
         elif risk == "Medium":
-            recommendation = "Balanced Mutual Funds, SIPs"
+            st.info("Recommended: Balanced Mutual Funds, SIPs")
         else:
-            recommendation = "Equity Mutual Funds, Direct Stocks"
-
-        st.info(f"Recommended: {recommendation}")
+            st.info("Recommended: Equity Mutual Funds, Direct Stocks")
 
         # SIP Calculator
         st.subheader("📅 SIP Calculator")
@@ -93,48 +88,63 @@ if uploaded_file:
         fd_return = fd_principal * ((1 + fd_rate / 100) ** fd_years)
         st.success(f"Estimated FD Returns after {fd_years} years: ₹{fd_return:,.2f}")
 
-        # Recommendation Text
-        rec_text = (
-            f"Based on your average annual surplus of ₹{avg_surplus:,.2f}, "
-            f"your financial discipline appears {'strong' if avg_surplus > 0 else 'weak'}. "
-            f"Considering your risk appetite is '{risk}', it is advisable to invest in {recommendation}. "
-            f"Continue tracking your income and expenses to achieve your long-term financial goals."
-        )
-
-        # Generate PDF function
-        def generate_pdf(data, avg_income, avg_expenses, avg_surplus, future_value, fd_return, risk, recommendation):
-            pdf = FPDF()
-            pdf.add_page()
-            pdf.set_font("Arial", size=12)
-
-            pdf.cell(200, 10, txt="📊 Personal Finance Report", ln=True, align="C")
-            pdf.ln(10)
-
-            pdf.cell(200, 10, txt=f"Average Annual Income: ₹{avg_income:,.2f}", ln=True)
-            pdf.cell(200, 10, txt=f"Average Annual Expenses: ₹{avg_expenses:,.2f}", ln=True)
-            pdf.cell(200, 10, txt=f"Average Annual Surplus: ₹{avg_surplus:,.2f}", ln=True)
-            pdf.cell(200, 10, txt=f"Future Value (SIP): ₹{future_value:,.2f}", ln=True)
-            pdf.cell(200, 10, txt=f"Fixed Deposit Return: ₹{fd_return:,.2f}", ln=True)
-            pdf.cell(200, 10, txt=f"Risk Appetite: {risk}", ln=True)
-            pdf.ln(10)
-
-            pdf.multi_cell(0, 10, txt=f"💡 Recommendation: {recommendation}")
-
-            pdf_output = BytesIO()
-            pdf.output(pdf_output)
-            pdf_output.seek(0)
-            return pdf_output.read()
-
-        # Download Button
-        st.subheader("📥 Download Your Report")
-        if st.button("Generate PDF Report"):
-            pdf_data = generate_pdf(
-                data, avg_income, avg_expenses, avg_surplus,
-                future_value, fd_return, risk, rec_text
-            )
-            b64 = base64.b64encode(pdf_data).decode()
-            href = f'<a href="data:application/pdf;base64,{b64}" download="Personal_Finance_Report.pdf">📄 Click here to download your report</a>'
-            st.markdown(href, unsafe_allow_html=True)
-
     else:
-        st.error("Please ensure your file has 'Year', 'Income', and one of: 'Expense', 'Expenses', 'Total Expense', or 'Total Expenses' columns.")
+        st.error("Please make sure your file has columns: 'Year', 'Income', and one of: 'Expense', 'Expenses', 'Total Expense', or 'Total Expenses'.")
+
+import base64
+from io import BytesIO
+from fpdf import FPDF
+
+# Final Recommendation Summary
+st.subheader("📌 Final Summary & Suggestions")
+recommendation = ""
+if risk == "Low":
+    recommendation = "Your risk profile is Low. Consider safe investments like Fixed Deposits, PPF, and RDs to preserve capital."
+elif risk == "Medium":
+    recommendation = "Your risk profile is Medium. SIPs and Balanced Mutual Funds could offer a mix of growth and safety."
+else:
+    recommendation = "Your risk profile is High. You may explore Equity Mutual Funds and Direct Stock investments for higher returns."
+
+st.markdown(f"""
+**🧾 Summary Advice:**
+- Based on your average annual surplus of ₹{avg_surplus:,.2f}, a monthly SIP of ₹{sip_amount} for {sip_years} years can grow to ₹{future_value:,.2f}.
+- Alternatively, a fixed deposit of ₹{fd_principal} for {fd_years} years at {fd_rate}% interest may yield ₹{fd_return:,.2f}.
+- {recommendation}
+""")
+
+# Generate PDF Report
+def generate_pdf(data, avg_income, avg_expenses, avg_surplus, future_value, fd_return, risk, recommendation):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.cell(200, 10, txt="Personal Finance Report", ln=True, align="C")
+    pdf.ln(10)
+
+    pdf.cell(200, 10, txt="📊 Summary Statistics:", ln=True)
+    pdf.cell(200, 10, txt=f"Average Annual Income: ₹{avg_income:,.2f}", ln=True)
+    pdf.cell(200, 10, txt=f"Average Annual Expenses: ₹{avg_expenses:,.2f}", ln=True)
+    pdf.cell(200, 10, txt=f"Average Annual Surplus: ₹{avg_surplus:,.2f}", ln=True)
+    pdf.ln(5)
+
+    pdf.cell(200, 10, txt="💰 Investment Results:", ln=True)
+    pdf.cell(200, 10, txt=f"SIP Future Value: ₹{future_value:,.2f}", ln=True)
+    pdf.cell(200, 10, txt=f"FD Returns: ₹{fd_return:,.2f}", ln=True)
+    pdf.ln(5)
+
+    pdf.cell(200, 10, txt="🧠 Risk Profile and Suggestions:", ln=True)
+    pdf.multi_cell(0, 10, txt=recommendation)
+
+    buffer = BytesIO()
+    pdf.output(buffer)
+    return buffer.getvalue()
+
+# Download button
+st.subheader("📥 Download Your Report")
+if st.button("Generate PDF Report"):
+    pdf_data = generate_pdf(
+        data, avg_income, avg_expenses, avg_surplus,
+        future_value, fd_return, risk, recommendation
+    )
+    b64 = base64.b64encode(pdf_data).decode()
+    href = f'<a href="data:application/octet-stream;base64,{b64}" download="Personal_Finance_Report.pdf">📄 Click here to download your report</a>'
+    st.markdown(href, unsafe_allow_html=True)
