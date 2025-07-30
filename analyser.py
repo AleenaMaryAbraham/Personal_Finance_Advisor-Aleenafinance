@@ -120,6 +120,15 @@ def generate_pdf(data, avg_income, avg_expenses, avg_surplus, future_value, fd_r
     pdf_output.seek(0)
     return pdf_output.read()
 
+# Generate recommendation paragraph
+recommendation = (
+    f"Based on your average annual surplus of {avg_surplus:.2f}, "
+    f"your financial discipline appears {'strong' if avg_surplus > 0 else 'weak'}. "
+    f"Considering your risk appetite is '{risk}', it is advisable to invest in "
+    f"{'equity mutual funds or stocks for higher returns' if risk == 'High' else 'balanced or fixed-income instruments like FDs or bonds'}. "
+    f"Continue tracking your income and expenses to achieve your long-term financial goals."
+)
+
 # PDF Download
 st.subheader("📥 Download Your Report")
 if st.button("Generate PDF Report"):
