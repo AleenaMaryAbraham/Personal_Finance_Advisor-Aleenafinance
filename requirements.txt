@@ -1,6 +1,6 @@
 streamlit
 pandas
-numpy
-plotly
-fpdf
+matplotlib
+seaborn
+fpdf==1.7.2
 openpyxl
