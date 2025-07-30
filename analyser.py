@@ -1,92 +1,130 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
-import plotly.express as px
+import matplotlib.pyplot as plt
+import seaborn as sns
+import base64
+from io import BytesIO
+from fpdf import FPDF
 
-# Title and description
 st.set_page_config(page_title="Personal Finance Advisor", layout="centered")
-st.title("💸 Personal Finance Advisor")
+st.title("📊 Personal Finance Advisor")
 st.markdown("""
-This app recommends savings or investment plans based on your income, expenses, and risk appetite. 
-Upload your historical income and expense data to get personalized suggestions and visual insights.
+Upload your income and expense data to receive personalized financial advice. 
+
+**File Requirements:**
+- Accepted formats: `.csv`, `.xls`, `.xlsx`
+- Required columns: `Date` or `Year`, `Salary` or `Income`, and either:
+  - `Expense`, `Expenses`, `Total Expense`, or `Total Expenses`
+  
+OR: granular expense categories like `Rent`, `Groceries`, `Entertainment`, etc. (we'll sum them).
 """)
 
 # Upload file
-uploaded_file = st.file_uploader("Upload your income and expense data (CSV, XLS, XLSX)", type=["csv", "xls", "xlsx"])
+uploaded_file = st.file_uploader("Upload your file", type=["csv", "xls", "xlsx"])
 
+# --- Helper Functions ---
+def convert_df_to_pdf(df, summary):
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+    pdf.multi_cell(0, 10, summary)
+
+    pdf.ln()
+    pdf.set_font("Arial", size=10)
+    for col in df.columns:
+        pdf.cell(40, 10, col, 1)
+    pdf.ln()
+
+    for _, row in df.iterrows():
+        for item in row:
+            pdf.cell(40, 10, str(item), 1)
+        pdf.ln()
+
+    buffer = BytesIO()
+    pdf.output(buffer)
+    buffer.seek(0)
+    return buffer
+
+# --- Main Logic ---
 if uploaded_file:
-    # Read data
-    if uploaded_file.name.endswith(".csv"):
-        data = pd.read_csv(uploaded_file)
-    else:
-        data = pd.read_excel(uploaded_file)
-
-    st.subheader("📊 Uploaded Data")
-    st.dataframe(data)
-
-    # Check for required columns
-    expense_cols = ['Expenses', 'Expense', 'Total Expense', 'Total Expenses']
-    expense_col_found = None
-    for col in expense_cols:
-        if col in data.columns:
-            expense_col_found = col
-            break
-
-    if 'Year' in data.columns and 'Income' in data.columns and expense_col_found:
-        # Rename expense column to a consistent name
-        data = data.rename(columns={expense_col_found: 'Expenses'})
-
-        # Calculate surplus
-        data['Surplus'] = data['Income'] - data['Expenses']
-
-        # Summary Metrics
-        st.subheader("📈 Summary Metrics")
-        avg_income = data['Income'].mean()
-        avg_expenses = data['Expenses'].mean()
-        avg_surplus = data['Surplus'].mean()
-        st.metric("Average Annual Income", f"₹{avg_income:,.2f}")
-        st.metric("Average Annual Expenses", f"₹{avg_expenses:,.2f}")
-        st.metric("Average Annual Surplus", f"₹{avg_surplus:,.2f}")
-
-        # Visualizations
-        st.subheader("📉 Income vs Expenses Over Time")
-        fig1 = px.line(data, x='Year', y=['Income', 'Expenses', 'Surplus'], markers=True)
-        st.plotly_chart(fig1)
-
-        st.subheader("💰 Surplus Distribution")
-        fig2 = px.pie(data, values='Surplus', names='Year', title='Surplus Distribution by Year')
-        st.plotly_chart(fig2)
-
-        # Risk Appetite
-        st.subheader("⚖️ Choose Your Risk Appetite")
-        risk = st.selectbox("Risk Tolerance", ["Low", "Medium", "High"])
-
-        st.markdown("### 🧠 Recommended Strategy")
-        if risk == "Low":
-            st.info("Recommended: Fixed Deposits, Recurring Deposits, Public Provident Fund (PPF)")
-        elif risk == "Medium":
-            st.info("Recommended: Balanced Mutual Funds, SIPs")
+    try:
+        # Read file
+        if uploaded_file.name.endswith(".csv"):
+            df = pd.read_csv(uploaded_file)
         else:
-            st.info("Recommended: Equity Mutual Funds, Direct Stocks")
+            df = pd.read_excel(uploaded_file)
 
-        # SIP Calculator
-        st.subheader("📅 SIP Calculator")
-        sip_amount = st.number_input("Monthly Investment (₹)", min_value=0, value=5000)
-        sip_years = st.slider("Investment Period (Years)", 1, 30, 5)
-        sip_rate = st.slider("Expected Annual Return (%)", 1, 20, 12)
+        st.subheader("Preview of Uploaded Data")
+        st.dataframe(df.head())
 
-        months = sip_years * 12
-        monthly_rate = sip_rate / 12 / 100
-        future_value = sip_amount * (((1 + monthly_rate) ** months - 1) * (1 + monthly_rate)) / monthly_rate
-        st.success(f"Estimated SIP Returns after {sip_years} years: ₹{future_value:,.2f}")
+        # Standardize column names
+        df.columns = df.columns.str.strip().str.lower()
+        col_map = {
+            'salary': 'income',
+            'total income': 'income',
+            'year': 'year',
+            'date': 'year',
+            'expenses': 'expense',
+            'total expenses': 'expense',
+            'total expense': 'expense',
+        }
+        df.rename(columns=col_map, inplace=True)
 
-        # FD Calculator
-        st.subheader("🏦 Fixed Deposit Calculator")
-        fd_principal = st.number_input("FD Principal Amount (₹)", min_value=0, value=50000)
-        fd_years = st.slider("FD Tenure (Years)", 1, 10, 3)
-        fd_rate = st.slider("FD Interest Rate (%)", 1, 10, 6)
-        fd_return = fd_principal * ((1 + fd_rate / 100) ** fd_years)
-        st.success(f"Estimated FD Returns after {fd_years} years: ₹{fd_return:,.2f}")
+        # Infer income and expenses
+        income_col = next((col for col in df.columns if 'income' in col), None)
+        year_col = next((col for col in df.columns if 'year' in col), None)
 
-    else:
-        st.error("Please make sure your file has columns: 'Year', 'Income', and one of: 'Expense', 'Expenses', 'Total Expense', or 'Total Expenses'.")
+        # Handle granular expenses if needed
+        if 'expense' not in df.columns:
+            expense_cols = [col for col in df.columns if col not in [income_col, year_col] and df[col].dtype != 'O']
+            df['expense'] = df[expense_cols].sum(axis=1)
+
+        # Final check
+        if not all([income_col, year_col, 'expense' in df.columns]):
+            st.error("Please make sure your file has columns: 'Year', 'Income', and either 'Expense' or granular expense categories.")
+        else:
+            df = df[[year_col, income_col, 'expense']].copy()
+            df.rename(columns={year_col: 'Year', income_col: 'Income', 'expense': 'Expenses'}, inplace=True)
+            df['Savings'] = df['Income'] - df['Expenses']
+            df['Savings Rate (%)'] = (df['Savings'] / df['Income']) * 100
+
+            st.success("✅ Financial summary computed!")
+            st.subheader("📈 Summary Table")
+            st.dataframe(df)
+
+            # --- Visualizations ---
+            st.subheader("📊 Visualizations")
+            fig, ax = plt.subplots(figsize=(10, 5))
+            df.plot(x='Year', y=['Income', 'Expenses', 'Savings'], kind='bar', ax=ax)
+            plt.title("Yearly Income, Expenses, and Savings")
+            plt.ylabel("Amount")
+            st.pyplot(fig)
+
+            # --- Advice Paragraph ---
+            avg_saving_rate = df['Savings Rate (%)'].mean()
+            if avg_saving_rate > 30:
+                advice = "You're saving quite well! Consider diversifying your investments in SIPs or mutual funds."
+            elif avg_saving_rate > 15:
+                advice = "Good job maintaining savings. You may explore safer investments like Fixed Deposits or a balanced SIP."
+            else:
+                advice = "Your savings rate is low. Focus on reducing discretionary spending and build an emergency fund first."
+
+            summary_text = f"Based on your data, your average annual savings rate is approximately {avg_saving_rate:.2f}%. {advice}"
+
+            st.subheader("📝 Personalized Advice")
+            st.markdown(f"""
+            **Advice Summary**
+            > {summary_text}
+            """)
+
+            # --- Download PDF ---
+            pdf_data = convert_df_to_pdf(df, summary_text)
+            st.download_button(
+                label="📄 Download PDF Report",
+                data=pdf_data,
+                file_name="personal_finance_report.pdf",
+                mime="application/pdf"
+            )
+
+    except Exception as e:
+        st.error(f"Something went wrong: {e}")
